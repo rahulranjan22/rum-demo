@@ -13,7 +13,7 @@ A standalone browser tool for generating synthetic RUM (Real User Monitoring) ev
 * Fan-out to up to 3 APM endpoints in parallel with one click
 * Routes all requests through a local CORS proxy so browser restrictions do not block the calls
 * Rotates 8 realistic browser/OS user-agents and 15 geo IPs per event so Kibana shows real Visitor Breakdown and location data
-* First-run setup overlay prompts you to enter your own APM URLs — no personal endpoints pre-filled
+* First-run setup overlay prompts you to enter your own APM URLs: no personal endpoints pre-filled
 * Endpoint config persists in localStorage across page refreshes
 * Live proxy status badge in the footer shows green when the proxy is running and red with the start command when it is not
 * Session stats card shows a live timer and running TX/span/error/POST counts
@@ -22,9 +22,9 @@ A standalone browser tool for generating synthetic RUM (Real User Monitoring) ev
 
 The UI uses a two-column layout:
 
-* Left column — Product Catalog and full Actions panel (standard, standalone, burst, custom event)
-* Right sidebar — Session Stats with live timer, Cart, User Journeys, and Kibana quick-links
-* Below the grid — dark-themed RUM Event Log and Integration reference table
+* Left column: Product Catalog and full Actions panel (standard, standalone, burst, custom event)
+* Right sidebar: Session Stats with live timer, Cart, User Journeys, and Kibana quick-links
+* Below the grid: dark-themed RUM Event Log and Integration reference table
 
 ## Requirements
 
@@ -67,7 +67,7 @@ Press Ctrl+C to stop both servers. If you run `start.py` again while it is alrea
 On first load a setup overlay appears. Add up to 3 APM server URLs.
 
 * Endpoint 1 is required, 2 and 3 are optional
-* Leave Auth blank for RUM — RUM intake does not require a token or API key
+* Leave Auth blank for RUM: RUM intake does not require a token or API key
 * Kibana URL is optional and generates quick-links in the sidebar
 * Click Save and start when you are done
 
@@ -79,34 +79,34 @@ Every action fires a RUM transaction with realistic child spans to all checked e
 
 Standard actions:
 
-* Search — product search with API, cache, and render spans
-* Page Load — homepage load with resource, fetch, and FCP spans
-* Filter — category filter with API and render spans
-* Login — auth request and session create
-* Logout — session teardown
-* Recommendations — recommendation fetch, optionally calls the OTel demo app if integration is on
-* Slow TX (2s) — 2 second blocking span, useful for latency testing
-* Cache Hit — fast cache-hit path under 10ms
-* API Retry — simulated retry with 3 attempt spans
-* JS Error — transaction with a captured JavaScript error
-* Timeout Error — network timeout span with captured error
-* Checkout — cart validation, payment, and confirmation spans
+* Search: product search with API, cache, and render spans
+* Page Load: homepage load with resource, fetch, and FCP spans
+* Filter: category filter with API and render spans
+* Login: auth request and session create
+* Logout: session teardown
+* Recommendations: recommendation fetch, optionally calls the OTel demo app if integration is on
+* Slow TX (2s): 2 second blocking span, useful for latency testing
+* Cache Hit: fast cache-hit path under 10ms
+* API Retry: simulated retry with 3 attempt spans
+* JS Error: transaction with a captured JavaScript error
+* Timeout Error: network timeout span with captured error
+* Checkout: cart validation, payment, and confirmation spans
 
 Standalone actions (no OTel demo app needed):
 
-* Dashboard load — BI dashboard with 5 chart-load spans
-* Form submit — multi-field form validation and submit
-* WebSocket session — connect, 15 messages, disconnect
-* Infinite scroll — intersection observer, fetch, DOM append
+* Dashboard load: BI dashboard with 5 chart-load spans
+* Form submit: multi-field form validation and submit
+* WebSocket session: connect, 15 messages, disconnect
+* Infinite scroll: intersection observer, fetch, DOM append
 
 User journeys fire several correlated transactions that share one traceId so they appear linked in APM Traces:
 
-* New visitor — Homepage, Search, Product detail, Add to cart
-* Full purchase — Login, Browse, Cart, Payment, Confirm
-* Abandoned search — Search, Filter, Slow load, Timeout
-* Power user — 5 steps including Login, Search, Filter, Product, Checkout
-* Slow mobile — Page load, Recommendations, Slow TX, Timeout, Error
-* API heavy — 5 parallel API calls, DB, Cache, Render
+* New visitor: Homepage, Search, Product detail, Add to cart
+* Full purchase: Login, Browse, Cart, Payment, Confirm
+* Abandoned search: Search, Filter, Slow load, Timeout
+* Power user: 5 steps including Login, Search, Filter, Product, Checkout
+* Slow mobile: Page load, Recommendations, Slow TX, Timeout, Error
+* API heavy: 5 parallel API calls, DB, Cache, Render
 
 Burst mode fires 5 to 100 events sharing one traceId. Use this to generate volume or test ingest throughput.
 
@@ -175,9 +175,9 @@ Each request includes an X-Target-Url header that tells the proxy where to forwa
 
 Kibana User Experience shows Browser, OS, Device, and Location breakdowns. These come from:
 
-* Browser and OS — APM server reads the User-Agent HTTP header on the forwarded request. The proxy sets this from the rotated UA pool.
-* Location — APM server reads `context.request.socket.remote_address` from the NDJSON body and does a geo-IP lookup. The tool passes a rotated IP from 15 real public IPs across US, EU, APAC, SA, and IN.
-* Core Web Vitals — each page-load transaction includes `transaction.marks` (FCP, LCP, TTFB, domInteractive, domComplete) and `transaction.experience` (cls, fid, lcp, tbt).
+* Browser and OS: APM server reads the User-Agent HTTP header on the forwarded request. The proxy sets this from the rotated UA pool.
+* Location: APM server reads `context.request.socket.remote_address` from the NDJSON body and does a geo-IP lookup. The tool passes a rotated IP from 15 real public IPs across US, EU, APAC, SA, and IN.
+* Core Web Vitals: each page-load transaction includes `transaction.marks` (FCP, LCP, TTFB, domInteractive, domComplete) and `transaction.experience` (cls, fid, lcp, tbt).
 
 The 8 user-agents in the rotation pool cover Chrome on Windows, Chrome on macOS, Chrome on Android, Safari on iOS, Safari on macOS, Firefox on Windows, Chrome on Linux, and Edge on Windows.
 

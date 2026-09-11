@@ -4,8 +4,6 @@ Real User Monitoring is one of those things that sounds simple until you try to 
 
 This article walks through a tool I built for Elastic Support that generates synthetic RUM events and sends them to one or more APM servers at the same time. It runs entirely from a single Python command, needs no Node or npm, and produces real data in Kibana including browser breakdown, OS breakdown, device type, geo-location, Core Web Vitals, transaction waterfalls, correlated traces, and error capture.
 
----
-
 ## What is RUM and why is testing it hard
 
 RUM stands for Real User Monitoring. It is a type of APM telemetry captured in the browser. When a user loads a page, the APM RUM SDK measures things like:
@@ -26,8 +24,6 @@ The problem is that to see any of this you need events. You need a browser hitti
 Faking it is harder than it looks. The APM RUM intake API (`/intake/v2/events`) expects NDJSON. Browsers cannot call APM servers directly because of CORS. Even if you enable RUM in Fleet, the browser needs to be on the same origin or the APM server needs to explicitly allow cross-origin requests. And the data that populates the User Experience dashboard (browser, OS, device, location) comes from specific fields in the NDJSON body and the HTTP headers on the forwarded request, not from the browser making the call.
 
 This tool solves all of that.
-
----
 
 ## Architecture
 
@@ -72,14 +68,12 @@ Browser
 
 The key insight is that the proxy forwards the request server-to-server. There is no CORS restriction server-to-server. The browser only talks to `localhost:9211`, which it can always reach.
 
----
-
 ## Setup: from zero to data in Kibana
 
 ### What you need
 
 * Python 3 (already on macOS)
-* An Elastic APM server — ECH APM, a local Fleet-managed APM agent, or any APM-compatible endpoint
+* An Elastic APM server: ECH APM, a local Fleet-managed APM agent, or any APM-compatible endpoint
 * Chrome or Firefox
 
 You do not need npm, Node, Docker, or any build tooling.
@@ -115,9 +109,9 @@ The browser opens automatically. Press Ctrl+C to stop both servers. If the ports
 On first load you see a setup overlay. This is where you enter your APM server URLs.
 
 * Endpoint 1 is required
-* Endpoints 2 and 3 are optional — leave them blank or fill them in for fan-out testing
-* Auth — leave blank for RUM. RUM intake uses anonymous access by default
-* Kibana URL — optional but useful. When filled in, the right sidebar shows direct links to the APM service, transactions, errors, traces, service map, and User Experience dashboard
+* Endpoints 2 and 3 are optional: leave them blank or fill them in for fan-out testing
+* Auth: leave blank for RUM. RUM intake uses anonymous access by default
+* Kibana URL: optional but useful. When filled in, the right sidebar shows direct links to the APM service, transactions, errors, traces, service map, and User Experience dashboard
 
 Paste your APM server URL. For ECH it looks like `https://xxxx.apm.us-central1.gcp.cloud.es.io`. For local Fleet APM it is usually `http://localhost:8200`.
 
@@ -143,8 +137,6 @@ A 202 means the APM server accepted the event. Wait 10-15 seconds and check Kiba
 Observability → APM → Services → rum-demo
 ```
 
----
-
 ## The event log and session stats
 
 The right sidebar shows a Session Stats card with four counters that update in real time:
@@ -160,49 +152,45 @@ Below the stats is the Cart and User Journeys section. Below the two-column layo
 
 The proxy status badge in the footer turns green when it can reach `localhost:9211` and red when it cannot, with the start command displayed inline.
 
----
-
 ## Actions: what each one does
 
 Every action builds a valid APM NDJSON payload and sends it to all active endpoints. The payload includes a metadata block, a transaction object, and one or more span objects.
 
 ### Standard actions
 
-**Search** — fires a `product-search` user-interaction transaction with three spans: `api-search`, `cache-check`, and `render-results`.
+**Search**: fires a `product-search` user-interaction transaction with three spans: `api-search`, `cache-check`, and `render-results`.
 
-**Page Load** — fires a page-load type transaction with resource timing, fetch, and FCP marks. This is the transaction type that populates Core Web Vitals in the User Experience dashboard.
+**Page Load**: fires a page-load type transaction with resource timing, fetch, and FCP marks. This is the transaction type that populates Core Web Vitals in the User Experience dashboard.
 
-**Filter** — category filter with an API call span and a render span.
+**Filter**: category filter with an API call span and a render span.
 
-**Login** — auth request and session create spans.
+**Login**: auth request and session create spans.
 
-**Logout** — session teardown.
+**Logout**: session teardown.
 
-**Recommendations** — recommendation fetch. If Demo app integration is enabled and the OTel demo app is running on localhost:8080, this action also fetches `/api/recommendations` with a `traceparent` header, creating a real distributed trace.
+**Recommendations**: recommendation fetch. If Demo app integration is enabled and the OTel demo app is running on localhost:8080, this action also fetches `/api/recommendations` with a `traceparent` header, creating a real distributed trace.
 
-**Slow TX (2s)** — a blocking 2-second span useful for testing the APM latency percentile view.
+**Slow TX (2s)**: a blocking 2-second span useful for testing the APM latency percentile view.
 
-**Cache Hit** — a sub-10ms cache-hit path. Useful to show bimodal latency distributions.
+**Cache Hit**: a sub-10ms cache-hit path. Useful to show bimodal latency distributions.
 
-**API Retry** — three retry spans with exponential backoff labels.
+**API Retry**: three retry spans with exponential backoff labels.
 
-**JS Error** — a transaction with a `captureError` call. Shows up in APM Errors and increments the error counter in the session stats.
+**JS Error**: a transaction with a `captureError` call. Shows up in APM Errors and increments the error counter in the session stats.
 
-**Timeout Error** — a network timeout span with a captured error.
+**Timeout Error**: a network timeout span with a captured error.
 
-**Checkout** — cart validation, payment gateway call, and confirmation spans. Also clears the cart.
+**Checkout**: cart validation, payment gateway call, and confirmation spans. Also clears the cart.
 
 ### Standalone actions (no OTel demo needed)
 
-**Dashboard load** — a BI dashboard transaction with five chart-load spans running in parallel.
+**Dashboard load**: a BI dashboard transaction with five chart-load spans running in parallel.
 
-**Form submit** — multi-field form validation and submit spans.
+**Form submit**: multi-field form validation and submit spans.
 
-**WebSocket session** — connect, 15 message spans, disconnect. Simulates a live data feed.
+**WebSocket session**: connect, 15 message spans, disconnect. Simulates a live data feed.
 
-**Infinite scroll** — intersection observer trigger, fetch, and DOM append spans.
-
----
+**Infinite scroll**: intersection observer trigger, fetch, and DOM append spans.
 
 ## User Journeys
 
@@ -210,21 +198,19 @@ User journeys fire several transactions that share a single traceId. This means 
 
 The six journeys:
 
-**New visitor** — page-load → search → three product views → add to cart. Six transactions, all linked.
+**New visitor**: page-load → search → three product views → add to cart. Six transactions, all linked.
 
-**Full purchase** — login → browse → add to cart → payment → confirmation.
+**Full purchase**: login → browse → add to cart → payment → confirmation.
 
-**Abandoned search** — search → filter → slow-load → timeout → exit. Good for showing drop-off patterns.
+**Abandoned search**: search → filter → slow-load → timeout → exit. Good for showing drop-off patterns.
 
-**Power user** — login → five product views → compare → bulk checkout.
+**Power user**: login → five product views → compare → bulk checkout.
 
-**Slow mobile** — slow page-load → cache-miss → three retries → error. Shows what a bad mobile session looks like in APM.
+**Slow mobile**: slow page-load → cache-miss → three retries → error. Shows what a bad mobile session looks like in APM.
 
-**API heavy** — five parallel API calls → DB query → cache check → render. Good for showing span depth and parallel execution.
+**API heavy**: five parallel API calls → DB query → cache check → render. Good for showing span depth and parallel execution.
 
 In Kibana, open APM → Traces and click any trace to see the waterfall. All transactions in a journey are linked by the same traceId.
-
----
 
 ## Burst mode
 
@@ -234,8 +220,6 @@ The burst slider goes from 5 to 100 events. All events in a burst share one trac
 * Test APM ingest throughput
 * Verify fan-out is working across all configured endpoints
 * Trigger the high-cardinality transaction name warning if you want to show that behavior
-
----
 
 ## Custom event builder
 
@@ -249,18 +233,16 @@ At the bottom of the Actions panel is a custom event builder. Type any transacti
 
 This is useful during demos to show specific transaction names appearing in APM, or to test how a customer's transaction naming convention looks in the service map.
 
----
-
 ## How browser, OS, device, and location data work
 
 This is the part that took the most iteration to get right.
 
 When you look at the Kibana User Experience dashboard you see:
 
-* Browser breakdown — Chrome, Firefox, Safari, Edge
-* OS breakdown — Windows, macOS, iOS, Android, Linux
-* Device breakdown — desktop, mobile
-* Visitor breakdown — visitor count by location on a world map
+* Browser breakdown: Chrome, Firefox, Safari, Edge
+* OS breakdown: Windows, macOS, iOS, Android, Linux
+* Device breakdown: desktop, mobile
+* Visitor breakdown: visitor count by location on a world map
 
 These fields are populated by the APM server's ingest pipeline, not by the browser making the request. Specifically:
 
@@ -283,10 +265,10 @@ The proxy reads the `X-Sim-Ua` header from the browser request and sets it as th
 
 **Location** comes from `context.request.socket.remote_address` in the NDJSON body. The APM server reads this field and does a geo-IP lookup to set `client.geo.*`. The tool rotates 15 public IPs across different regions:
 
-* US — Google DNS, Google NYC, Fastly SF, AWS us-east-1, AWS us-west-2
-* Europe — Facebook London, Frankfurt, Paris
-* APAC — Singapore, Tokyo, Amsterdam
-* Other — São Paulo, Johannesburg, Mumbai, TEST-NET AU
+* US: Google DNS, Google NYC, Fastly SF, AWS us-east-1, AWS us-west-2
+* Europe: Facebook London, Frankfurt, Paris
+* APAC: Singapore, Tokyo, Amsterdam
+* Other: São Paulo, Johannesburg, Mumbai, TEST-NET AU
 
 Each event picks a random IP from this pool. That is why the User Experience map shows visitors from different countries.
 
@@ -307,8 +289,6 @@ Each event picks a random IP from this pool. That is why the User Experience map
 
 These populate the Web Vitals section of the User Experience dashboard directly.
 
----
-
 ## Why the proxy exists and how it works
 
 Browsers block cross-origin requests unless the server explicitly allows them. The APM RUM intake endpoint does support CORS, but only if RUM is enabled in the Fleet APM integration policy and the `allow_origins` list includes your browser's origin.
@@ -319,14 +299,12 @@ The proxy bypasses all of this. The browser calls `localhost:9211` with the real
 
 The proxy reads four custom headers from the browser:
 
-* `X-Target-Url` — the real APM server URL to forward to (required)
-* `X-Target-Auth` — optional authorization header to set on the forwarded request
-* `X-Sim-Ip` — simulated client IP, forwarded as `X-Forwarded-For`
-* `X-Sim-Ua` — simulated user-agent, set as `User-Agent` on the forwarded request
+* `X-Target-Url`: the real APM server URL to forward to (required)
+* `X-Target-Auth`: optional authorization header to set on the forwarded request
+* `X-Sim-Ip`: simulated client IP, forwarded as `X-Forwarded-For`
+* `X-Sim-Ua`: simulated user-agent, set as `User-Agent` on the forwarded request
 
 These never touch the actual browser request headers. They are set by the proxy on the outbound server request. That is how the APM server sees a Chrome iOS UA and a London IP even though the request is coming from your Mac.
-
----
 
 ## Fan-out: testing multiple endpoints at once
 
@@ -348,8 +326,6 @@ This is useful for:
 * Verifying that a migration from one APM server to another produces identical data
 
 Each endpoint is independent. You can uncheck one to exclude it from the next event and re-check it at any time.
-
----
 
 ## What to look at in Kibana after sending events
 
@@ -397,12 +373,10 @@ This is the RUM-specific dashboard. After sending a mix of page-load transaction
 
 * Page load duration distribution
 * Core Web Vitals (LCP, FID, CLS, TBT)
-* Visitor Breakdown — browser, OS, device columns
+* Visitor Breakdown: browser, OS, device columns
 * Map showing visitor locations by country
 
 If the browser or OS breakdown shows blank, do a hard refresh in Kibana (Cmd+Shift+R on Mac). Kibana caches data view field type information and can show stale mappings after an index was recreated.
-
----
 
 ## Common issues
 
@@ -412,7 +386,7 @@ The proxy is not running. Run `python3 start.py` from the repo directory and rel
 
 **All endpoint dots are grey or red**
 
-The APM server URL is not reachable. Check the URL in the config panel. For ECH, make sure the URL does not have a trailing path (just the hostname and port, no `/intake/v2/events` appended — the tool adds the path automatically).
+The APM server URL is not reachable. Check the URL in the config panel. For ECH, make sure the URL does not have a trailing path (just the hostname and port, no `/intake/v2/events` appended: the tool adds the path automatically).
 
 **202 in the log but nothing in Kibana**
 
@@ -430,8 +404,6 @@ Your browser cleared localStorage. Re-enter the endpoints and save.
 
 This can happen after the `traces-apm.rum-default` data stream is deleted and recreated. Kibana caches field type metadata. Hard refresh with Cmd+Shift+R.
 
----
-
 ## How the NDJSON payload is built
 
 The APM intake API expects NDJSON where the first line is a metadata object and subsequent lines are event objects. A minimal page-load transaction looks like this:
@@ -444,13 +416,11 @@ The APM intake API expects NDJSON where the first line is a metadata object and 
 
 Three things matter for User Experience data:
 
-1. `metadata.user_agent.original` — just the raw UA string, nothing more. The APM ingest pipeline parses it. Sending pre-parsed fields (`name`, `version`, `os` object) causes a field type conflict with the keyword mappings set by the pipeline.
+1. `metadata.user_agent.original`: just the raw UA string, nothing more. The APM ingest pipeline parses it. Sending pre-parsed fields (`name`, `version`, `os` object) causes a field type conflict with the keyword mappings set by the pipeline.
 
-2. `transaction.context.request.headers["User-Agent"]` — the APM server uses this to set `user_agent.original` for the transaction. The proxy also sets the actual HTTP `User-Agent` header to the same value for the pipeline to pick up.
+2. `transaction.context.request.headers["User-Agent"]`: the APM server uses this to set `user_agent.original` for the transaction. The proxy also sets the actual HTTP `User-Agent` header to the same value for the pipeline to pick up.
 
-3. `transaction.context.request.socket.remote_address` — the APM server reads this for geo-IP lookup. The ECH load balancer strips `X-Forwarded-For` headers, so the only reliable way to get rotated geo data is through this field in the NDJSON body.
-
----
+3. `transaction.context.request.socket.remote_address`: the APM server reads this for geo-IP lookup. The ECH load balancer strips `X-Forwarded-For` headers, so the only reliable way to get rotated geo data is through this field in the NDJSON body.
 
 ## OTel demo app integration
 
@@ -465,32 +435,26 @@ If the OTel demo's collector is configured to forward to your APM server, this c
 
 All other actions are fully standalone and do not need the OTel demo app running.
 
----
-
 ## What this tool is good for in a support context
 
-**Reproducing Kibana User Experience issues** — you can generate specific combinations of UA strings, geo IPs, and transaction types to reproduce mapping or aggregation problems without needing real user traffic.
+**Reproducing Kibana User Experience issues**: you can generate specific combinations of UA strings, geo IPs, and transaction types to reproduce mapping or aggregation problems without needing real user traffic.
 
-**Testing APM server configuration** — sending to a local Fleet APM and an ECH APM at the same time makes it easy to compare how the same event is indexed in each deployment. Useful for verifying that a Fleet policy change actually enables RUM.
+**Testing APM server configuration**: sending to a local Fleet APM and an ECH APM at the same time makes it easy to compare how the same event is indexed in each deployment. Useful for verifying that a Fleet policy change actually enables RUM.
 
-**Demonstrating APM RUM capabilities** — the journeys, burst mode, and action variety give you enough variety to walk through the full APM RUM feature set in a demo.
+**Demonstrating APM RUM capabilities**: the journeys, burst mode, and action variety give you enough variety to walk through the full APM RUM feature set in a demo.
 
-**Validating ingest pipelines** — after deleting and recreating a data stream, or after changing an ILM policy, you can send a controlled batch of events and confirm what landed in Elasticsearch without waiting for real user traffic.
-
----
+**Validating ingest pipelines**: after deleting and recreating a data stream, or after changing an ILM policy, you can send a controlled batch of events and confirm what landed in Elasticsearch without waiting for real user traffic.
 
 ## Files in the repo
 
 | File | What it does |
 |---|---|
-| `start.py` | Single launcher — runs HTTP server on 9210, proxy on 9211, opens browser |
+| `start.py` | Single launcher: runs HTTP server on 9210, proxy on 9211, opens browser |
 | `rum-demo.html` | Self-contained browser UI, all JS inline, no build step required |
-| `rum-proxy.py` | Standalone CORS proxy — use this if you want to run the proxy separately |
+| `rum-proxy.py` | Standalone CORS proxy: use this if you want to run the proxy separately |
 | `README.md` | Setup and feature reference |
 
 The HTML file is entirely self-contained. No external CDN, no SDK dependency, no API key baked in. All event construction and endpoint config lives in the file itself.
-
----
 
 ## Closing
 
@@ -501,7 +465,5 @@ Every fix came from actually testing against a real APM server, reading the APM 
 If you are working with Elastic APM RUM and need synthetic data, this is the fastest path from zero to a populated User Experience dashboard.
 
 The repo is at https://github.com/rahulranjan22/rum-demo.
-
----
 
 Built by Rahul Ranjan, Elastic Support
