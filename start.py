@@ -120,6 +120,9 @@ def serve(server):
 
 
 if __name__ == "__main__":
+    # SO_REUSEADDR lets the server bind even if the previous process didn't
+    # release the port yet (e.g. after Ctrl+C or a crash).
+    http.server.HTTPServer.allow_reuse_address = True
     proxy_server = http.server.HTTPServer(("0.0.0.0", PROXY_PORT), ProxyHandler)
     file_server  = http.server.HTTPServer(("0.0.0.0", HTTP_PORT),  QuietFileHandler)
 
