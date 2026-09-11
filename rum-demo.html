@@ -571,7 +571,9 @@ function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
 
   const metadata = {
     service: { name: SERVICE_NAME, version: SERVICE_VERSION, environment: ENVIRONMENT, agent: { name: 'rum-js', version: '5.14.0' }, language: { name: 'javascript' } },
-    user_agent: ua
+    // Only send original UA string — APM ingest pipeline parses name/os/device
+    // from this. Pre-sending parsed fields causes type conflict on user_agent.os.name.
+    user_agent: { original: ua.original }
   };
 
   const pgUrl = pageUrl(txName);
@@ -583,7 +585,6 @@ function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
   // and client.ip / geo.* from request.socket.remote_address.
   const txContext = {
     page: { url: pgUrl, referrer: '' },
-    user_agent: ua,
     tags: { lab: 'rum-demo' },
     request: {
       method: 'GET',
