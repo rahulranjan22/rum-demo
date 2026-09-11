@@ -37,50 +37,49 @@ git clone https://github.com/rahulranjan22/rum-demo.git
 cd rum-demo
 ```
 
-You need two files:
+Files included:
 
 | File | Purpose |
 |---|---|
 | `rum-demo.html` | The browser UI |
-| `rum-proxy.py` | Local CORS proxy (required) |
+| `rum-proxy.py` | CORS proxy (used internally by start.py) |
+| `start.py` | Single launcher — starts both servers and opens the browser |
 
-### 2. Start the CORS proxy
-
-The proxy listens on port `9211` and forwards browser requests to the real APM server server-side, adding CORS headers so the browser accepts the response.
+### 2. Run the launcher
 
 ```bash
+python3 start.py
+```
+
+That's it. `start.py` starts both required servers and opens `http://localhost:9210/rum-demo.html` in your browser automatically:
+
+```
+  Elastic APM RUM Demo
+  ─────────────────────────────────────
+  UI    →  http://localhost:9210/rum-demo.html
+  Proxy →  http://localhost:9211
+  
+  Opening browser...
+  Press Ctrl+C to stop.
+```
+
+Press **Ctrl+C** in the terminal to stop both servers.
+
+> **Why two servers?** The HTML page must be served over `http://` (not `file://`) so the browser sends a proper origin header. The CORS proxy forwards APM intake calls server-side, bypassing browser CORS restrictions. `start.py` runs both in background threads so you only need one terminal.
+
+### (Optional) Run servers individually
+
+If you want separate control:
+
+```bash
+# Terminal 1 — CORS proxy
 python3 rum-proxy.py
-```
 
-To use a different port:
-
-```bash
-python3 rum-proxy.py 9300
-```
-
-You should see:
-
-```
-RUM CORS proxy on http://localhost:9211
-Each request must include X-Target-Url header pointing to the real APM server.
-Press Ctrl+C to stop.
-```
-
-### 3. Serve the HTML page
-
-Open a second terminal in the same directory and run:
-
-```bash
+# Terminal 2 — HTTP server
 python3 -m http.server 9210
 ```
 
-This gives the page an `http://localhost:9210` origin. Opening the file directly as `file://` sends a `null` origin that APM servers reject.
-
-### 4. Open the tool
-
-```
-http://localhost:9210/rum-demo.html
-```
+Then open `http://localhost:9210/rum-demo.html`.
 
 ---
 
@@ -282,7 +281,7 @@ With integration off (default), all actions are fully synthetic and require no b
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Red "Proxy offline" badge | `rum-proxy.py` is not running | `python3 rum-proxy.py` in a terminal |
+| Red "Proxy offline" badge | Proxy not running | Run `python3 start.py` (or `python3 rum-proxy.py` separately) |
 | All endpoints show red dots | Proxy running but APM server unreachable | Check APM URL in config panel |
 | 400 from local APM | RUM not enabled in Fleet agent policy | Use ECH or another APM endpoint, or enable RUM in Fleet |
 | Setup overlay reappears | `localStorage` was cleared | Re-enter your endpoints in setup |
@@ -294,6 +293,7 @@ With integration off (default), all actions are fully synthetic and require no b
 
 | File | Description |
 |---|---|
+| `start.py` | Single launcher — runs HTTP server + CORS proxy, opens browser |
 | `rum-demo.html` | Self-contained browser UI — all JS inline, no build step |
 | `rum-proxy.py` | Python 3 CORS proxy, generic `X-Target-Url` routing |
 
