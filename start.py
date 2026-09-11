@@ -121,9 +121,25 @@ def serve(server):
         pass
 
 
+def free_port(port):
+    """Kill any process currently listening on port so we can always bind."""
+    import subprocess, signal
+    try:
+        out = subprocess.check_output(["lsof", "-ti", f":{port}"], text=True).strip()
+        for pid in out.splitlines():
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    except subprocess.CalledProcessError:
+        pass  # nothing on that port
+
+
 if __name__ == "__main__":
-    # SO_REUSEADDR lets the server bind even if the previous process didn't
-    # release the port yet (e.g. after Ctrl+C or a crash).
+    free_port(PROXY_PORT)
+    free_port(HTTP_PORT)
+    time.sleep(0.3)  # let OS release sockets
+
     http.server.HTTPServer.allow_reuse_address = True
     proxy_server = http.server.HTTPServer(("0.0.0.0", PROXY_PORT), ProxyHandler)
     file_server  = http.server.HTTPServer(("0.0.0.0", HTTP_PORT),  QuietFileHandler)
