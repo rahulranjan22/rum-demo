@@ -609,7 +609,7 @@ function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
     const errCtx = { page: txContext.page, user_agent: ua };
     lines.push(JSON.stringify({ error: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, exception: { message: captureErr.message, type: 'Error' }, timestamp: ts, context: errCtx }}));
   }
-  return { body: lines.join('\n'), traceId, txId, simIp };
+  return { body: lines.join('\n'), traceId, txId, simIp, simUa: ua.original };
 }
 
 function sendRUM(txName, txType, spans=[], captureErr=null, traceId=null, txId=null, silent=false) {
@@ -634,6 +634,7 @@ function sendRUM(txName, txType, spans=[], captureErr=null, traceId=null, txId=n
       headers['X-Target-Url']  = ep.url;
       if (ep.auth) headers['X-Target-Auth'] = ep.auth;
       if (payload.simIp) headers['X-Sim-Ip'] = payload.simIp;
+      if (payload.simUa) headers['X-Sim-Ua'] = payload.simUa;
     } else {
       if (ep.auth) headers['Authorization'] = ep.auth;
     }
