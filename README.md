@@ -2,6 +2,11 @@
 
 A standalone browser tool for generating synthetic RUM (Real User Monitoring) events and sending them to one or more Elastic APM servers at the same time. Built for Elastic Support to demonstrate and validate RUM ingest across ECH, local APM, and other deployments.
 
+<img width="3426" height="1694" alt="image" src="https://github.com/user-attachments/assets/b8b15a8c-3495-40af-936e-f2b9468a727f" />
+
+<img width="3396" height="1718" alt="image" src="https://github.com/user-attachments/assets/9c5d7671-9ff1-4cbb-99f3-70d22d8f2ef8" />
+
+
 ## What it does
 
 * Sends RUM transactions, spans, and errors directly to the APM intake API using NDJSON format
