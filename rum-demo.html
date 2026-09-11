@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elastic APM RUM Demo — Standalone Multi-Endpoint Lab</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f4f8; min-height: 100vh; }
+
+    .header { background: #07C; color: white; padding: 14px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .badge { background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+    .ep-dots { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .ep-dot-row { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; flex-shrink: 0; }
+    .dot.ok { background: #00BFB3; }
+    .dot.err { background: #BD271E; }
+    .dot.pending { background: #F5A700; }
+
+    .config-bar { background: white; border-bottom: 1px solid #d3dae6; padding: 10px 24px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .config-bar label { font-size: 13px; font-weight: 600; color: #343741; }
+    .ep-checks { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .ep-check-item { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #343741; cursor: pointer; padding: 4px 10px; border-radius: 4px; border: 1px solid #d3dae6; background: white; transition: all 0.15s; white-space: nowrap; }
+    .ep-check-item input { cursor: pointer; accent-color: #07C; }
+
+    .config-toggle { padding: 6px 12px; border-radius: 4px; border: 1px solid #d3dae6; background: white; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; transition: all 0.15s; white-space: nowrap; }
+    .config-toggle:hover { background: #f0f4f8; }
+    .config-toggle.open { background: #E6F2FF; border-color: #07C; color: #07C; }
+
+    .auto-run { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .toggle { width: 36px; height: 20px; background: #D3DAE6; border-radius: 10px; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+    .toggle.on { background: #07C; }
+    .toggle::after { content: ''; width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: left 0.2s; }
+    .toggle.on::after { left: 18px; }
+
+    .config-panel { background: #FAFBFD; border-bottom: 1px solid #d3dae6; padding: 16px 24px; display: none; }
+    .config-panel.open { display: block; }
+    .config-panel-title { font-size: 13px; font-weight: 600; color: #343741; margin-bottom: 12px; }
+    .ep-config-grid { display: grid; grid-template-columns: auto 140px 1fr 200px 60px; gap: 8px; align-items: center; }
+    .ep-config-grid .col-hdr { font-size: 11px; font-weight: 600; color: #69707D; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 4px; }
+    .ep-config-grid input[type="text"] { border: 1px solid #D3DAE6; border-radius: 4px; padding: 6px 8px; font-size: 12px; color: #343741; width: 100%; }
+    .ep-config-grid input:focus { outline: none; border-color: #07C; box-shadow: 0 0 0 2px rgba(0,119,204,0.15); }
+    .ep-num { font-size: 11px; font-weight: 600; color: #69707D; background: #E8EDF2; border-radius: 3px; padding: 2px 6px; text-align: center; }
+    .status-badge { font-size: 11px; padding: 3px 7px; border-radius: 10px; font-weight: 500; text-align: center; }
+    .status-badge.ok { background: #D4F5F3; color: #006B6B; }
+    .status-badge.err { background: #FDDCDB; color: #BD271E; }
+    .status-badge.idle { background: #E8EDF2; color: #69707D; }
+    .config-actions { margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+    .btn-apply { padding: 6px 16px; background: #07C; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; }
+    .btn-apply:hover { background: #0666A0; }
+    .btn-reset { padding: 6px 12px; background: white; color: #343741; border: 1px solid #D3DAE6; border-radius: 4px; font-size: 13px; cursor: pointer; }
+    .btn-reset:hover { background: #f0f4f8; }
+    .config-note { font-size: 11px; color: #69707D; margin-left: auto; }
+    .config-note strong { color: #BD271E; }
+
+    .main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 24px; max-width: 1400px; }
+    .full-width { grid-column: 1 / -1; }
+
+    .card { background: white; border-radius: 8px; border: 1px solid #d3dae6; overflow: hidden; }
+    .card-header { padding: 11px 16px; border-bottom: 1px solid #d3dae6; display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 13px; font-weight: 600; color: #343741; }
+    .card-body { padding: 14px 16px; }
+
+    .store-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .product { border: 1px solid #d3dae6; border-radius: 6px; padding: 10px; cursor: pointer; transition: all 0.15s; text-align: center; }
+    .product:hover { border-color: #07C; background: #F5F9FF; transform: translateY(-1px); }
+    .product .emoji { font-size: 24px; margin-bottom: 4px; }
+    .product .name { font-size: 11px; font-weight: 600; color: #343741; }
+    .product .price { font-size: 10px; color: #69707D; margin-top: 1px; }
+
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+    .action-btn { padding: 9px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.15s; text-align: left; white-space: nowrap; }
+    .action-btn.primary { background: #07C; color: white; }
+    .action-btn.primary:hover { background: #0666A0; }
+    .action-btn.secondary { background: #D3DAE6; color: #343741; }
+    .action-btn.secondary:hover { background: #C2CBD9; }
+    .action-btn.danger { background: #BD271E; color: white; }
+    .action-btn.danger:hover { background: #A01414; }
+    .action-btn.success { background: #00BFB3; color: white; }
+    .action-btn.success:hover { background: #009990; }
+    .action-btn.warn { background: #F5A700; color: #343741; }
+    .action-btn.warn:hover { background: #D4900E; }
+    .action-btn.purple { background: #6D3FC5; color: white; }
+    .action-btn.purple:hover { background: #5B33A5; }
+
+    .journey-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .journey-btn { padding: 10px 12px; border-radius: 6px; border: 1px solid #d3dae6; background: #FAFBFD; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+    .journey-btn:hover { border-color: #07C; background: #F0F7FF; }
+    .journey-btn .j-title { font-weight: 600; color: #343741; margin-bottom: 2px; }
+    .journey-btn .j-steps { font-size: 10px; color: #69707D; line-height: 1.4; }
+
+    .custom-row { display: flex; gap: 7px; align-items: center; margin-top: 10px; }
+    .custom-row input, .custom-row select { border: 1px solid #D3DAE6; border-radius: 4px; padding: 6px 8px; font-size: 12px; color: #343741; }
+    .custom-row input { flex: 1; }
+    .custom-row select { width: 140px; }
+    .custom-row button { padding: 6px 12px; background: #07C; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .custom-row button:hover { background: #0666A0; }
+
+    .burst-row { display: flex; gap: 7px; align-items: center; margin-top: 8px; }
+    .burst-row label { font-size: 12px; color: #343741; }
+    .burst-row input[type=range] { flex: 1; accent-color: #07C; }
+    .burst-row span { font-size: 12px; font-weight: 600; color: #07C; min-width: 24px; }
+    .burst-row button { padding: 5px 12px; background: #6D3FC5; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    .burst-row button:hover { background: #5B33A5; }
+
+    .log-box { font-family: "SF Mono", Menlo, monospace; font-size: 11px; background: #1D1E24; color: #DFE5EF; padding: 10px; border-radius: 6px; height: 220px; overflow-y: auto; }
+    .log-line { padding: 2px 0; line-height: 1.5; }
+    .log-line.tx { color: #79AAD9; }
+    .log-line.fan { color: #98C4E5; padding-left: 14px; font-size: 10px; }
+    .log-line.span { color: #A5C6EA; padding-left: 12px; }
+    .log-line.error { color: #F86B63; }
+    .log-line.info { color: #54B399; }
+    .log-line.journey { color: #E5A800; }
+    .log-ok { color: #00BFB3; }
+    .log-err { color: #F86B63; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+    .metric { text-align: center; padding: 8px; background: #F7F8FC; border-radius: 6px; }
+    .metric .val { font-size: 20px; font-weight: 700; color: #07C; }
+    .metric .lbl { font-size: 10px; color: #69707D; margin-top: 2px; }
+
+    .cart-items { min-height: 60px; }
+    .cart-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f4f8; font-size: 12px; }
+    .cart-item .item-name { flex: 1; color: #343741; }
+    .cart-item .item-qty { color: #69707D; }
+    .empty-cart { color: #98A2B3; font-size: 12px; text-align: center; padding: 16px 0; }
+
+    .kibana-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+    /* ── First-run setup overlay ── */
+    .setup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; }
+    .setup-box { background: white; border-radius: 12px; width: 600px; max-width: 95vw; padding: 32px; box-shadow: 0 8px 40px rgba(0,0,0,0.25); }
+    .setup-box h2 { font-size: 20px; font-weight: 600; color: #343741; margin-bottom: 6px; }
+    .setup-box .sub { font-size: 13px; color: #69707D; margin-bottom: 24px; line-height: 1.5; }
+    .setup-ep { margin-bottom: 16px; padding: 14px 16px; border: 1px solid #D3DAE6; border-radius: 8px; background: #FAFBFD; }
+    .setup-ep-label { font-size: 11px; font-weight: 600; color: #69707D; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+    .setup-ep-label .optional { font-weight: 400; color: #98A2B3; text-transform: none; letter-spacing: 0; }
+    .setup-ep input { width: 100%; border: 1px solid #D3DAE6; border-radius: 4px; padding: 7px 10px; font-size: 13px; color: #343741; margin-top: 6px; }
+    .setup-ep input:focus { outline: none; border-color: #07C; box-shadow: 0 0 0 2px rgba(0,119,204,0.15); }
+    .setup-ep input::placeholder { color: #98A2B3; }
+    .setup-ep-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+    .setup-ep-row label { font-size: 11px; color: #69707D; margin-top: 8px; display: block; }
+    .setup-actions { margin-top: 20px; display: flex; align-items: center; gap: 10px; }
+    .setup-save { flex: 1; padding: 10px; background: #07C; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    .setup-save:hover { background: #0666A0; }
+    .setup-save:disabled { background: #D3DAE6; color: #98A2B3; cursor: not-allowed; }
+    .setup-err { font-size: 12px; color: #BD271E; margin-top: 6px; display: none; }
+    .setup-proxy-note { font-size: 11px; color: #69707D; background: #F7F8FC; border-radius: 6px; padding: 10px 12px; margin-top: 16px; line-height: 1.6; }
+    .setup-proxy-note code { background: #E8EDF2; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+    .kib-link { padding: 4px 9px; background: #F0F4F8; border: 1px solid #D3DAE6; border-radius: 4px; text-decoration: none; font-size: 12px; color: #07C; white-space: nowrap; }
+    .kib-link:hover { background: #E8F1FF; }
+
+    .dep-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .dep-table th { background: #F7F8FC; text-align: left; padding: 7px 10px; font-weight: 600; color: #343741; border-bottom: 1px solid #D3DAE6; }
+    .dep-table td { padding: 7px 10px; border-bottom: 1px solid #F0F4F8; color: #343741; vertical-align: top; }
+    .dep-table td:first-child { font-family: "SF Mono", monospace; color: #6D3FC5; white-space: nowrap; }
+    .dep-table tr:last-child td { border-bottom: none; }
+    .pill { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .pill.green { background: #D4F5F3; color: #006B6B; }
+    .pill.blue { background: #E6F2FF; color: #07C; }
+    .pill.gray { background: #E8EDF2; color: #69707D; }
+    .pill.orange { background: #FFF3D6; color: #8A5E00; }
+  </style>
+</head>
+<body>
+
+<!-- First-run setup overlay -->
+<div class="setup-overlay" id="setup-overlay" style="display:none">
+  <div class="setup-box">
+    <h2>⚡ APM endpoint setup</h2>
+    <p class="sub">Add up to 3 APM server endpoints. Only EP1 is required — leave others empty or skip them.
+      All requests route via the local CORS proxy (<code style="background:#F0F4F8;padding:1px 5px;border-radius:3px;font-size:12px">rum-proxy.py</code>).
+      RUM intake needs <strong>no auth</strong>.</p>
+
+    <div id="setup-slots"></div>
+
+    <button id="setup-add-btn" onclick="setupAddSlot()" style="font-size:12px;padding:6px 12px;border:1px dashed #D3DAE6;border-radius:6px;background:white;cursor:pointer;color:#07C;width:100%;margin-top:4px">
+      + Add another endpoint
+    </button>
+
+    <p class="setup-err" id="setup-err">Enter at least one APM server URL to continue.</p>
+
+    <div class="setup-proxy-note" id="setup-proxy-status">
+      Checking proxy status...
+    </div>
+
+    <div class="setup-actions">
+      <button class="setup-save" id="setup-save-btn" onclick="saveSetup()" disabled>Save &amp; start</button>
+    </div>
+  </div>
+</div>
+
+<div class="header">
+  <span style="font-size:22px">⚡</span>
+  <h1>Elastic APM RUM Demo</h1>
+  <span class="badge">Multi-endpoint lab</span>
+  <span class="badge" id="standalone-badge" style="background:rgba(0,191,179,0.3)">Standalone</span>
+  <div class="ep-dots" id="ep-dots"></div>
+</div>
+
+<div class="config-bar">
+  <label>Send to:</label>
+  <div class="ep-checks" id="ep-checks"></div>
+  <button class="config-toggle" id="config-toggle" onclick="toggleConfig()">⚙ Edit endpoints</button>
+  <label class="ep-check-item" style="border-color:#d3dae6;background:#FAFBFD" title="When ON, the Recommendations button also fetches localhost:8080 to create a real distributed trace. All other actions are always standalone.">
+    <input type="checkbox" id="demo-integration-chk" onchange="setDemoIntegration(this.checked)">
+    Demo app integration
+  </label>
+  <div class="auto-run">
+    <span style="font-size:13px;color:#343741">Auto-simulate</span>
+    <div class="toggle" id="auto-toggle" onclick="toggleAuto()"></div>
+  </div>
+</div>
+
+<div class="config-panel" id="config-panel">
+  <div class="config-panel-title">APM endpoint configuration</div>
+  <div class="ep-config-grid" id="ep-config-grid">
+    <div class="col-hdr">#</div>
+    <div class="col-hdr">Name</div>
+    <div class="col-hdr">APM server URL <span style="font-weight:400;font-size:10px">(RUM needs no auth)</span></div>
+    <div class="col-hdr">Auth <span style="font-weight:400;font-size:10px">(leave blank for RUM)</span></div>
+    <div class="col-hdr">Status</div>
+  </div>
+  <div class="config-actions">
+    <button class="btn-apply" onclick="applyConfig()">Apply</button>
+    <button class="btn-reset" onclick="resetConfig()">Reset defaults</button>
+    <span class="config-note"><strong>Note:</strong> Serverless does not support the APM RUM intake format. ECH APM server supports CORS for browser RUM.</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Product Catalog -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🛍 Product Catalog</span>
+      <span style="font-size:11px;color:#69707D">Click → view TX + span</span>
+    </div>
+    <div class="card-body">
+      <div class="store-grid">
+        <div class="product" onclick="viewProduct('telescope','Telescope Pro','$349')"><div class="emoji">🔭</div><div class="name">Telescope Pro</div><div class="price">$349</div></div>
+        <div class="product" onclick="viewProduct('headphones','Headphones X1','$129')"><div class="emoji">🎧</div><div class="name">Headphones X1</div><div class="price">$129</div></div>
+        <div class="product" onclick="viewProduct('camera','Camera Ultra','$699')"><div class="emoji">📷</div><div class="name">Camera Ultra</div><div class="price">$699</div></div>
+        <div class="product" onclick="viewProduct('keyboard','Mechanical KB','$89')"><div class="emoji">⌨️</div><div class="name">Mechanical KB</div><div class="price">$89</div></div>
+        <div class="product" onclick="viewProduct('monitor','4K Monitor','$549')"><div class="emoji">🖥</div><div class="name">4K Monitor</div><div class="price">$549</div></div>
+        <div class="product" onclick="viewProduct('smartwatch','SmartWatch Z','$199')"><div class="emoji">⌚</div><div class="name">SmartWatch Z</div><div class="price">$199</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🛒 Cart <span id="cart-count" style="color:#07C">(0)</span></span>
+      <button class="action-btn success" onclick="checkout()" style="font-size:11px;padding:3px 9px">Checkout</button>
+    </div>
+    <div class="card-body">
+      <div class="cart-items" id="cart-items"><div class="empty-cart">Cart is empty — click products to add</div></div>
+    </div>
+  </div>
+
+  <!-- Action Panel (expanded) -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">⚡ Actions</span>
+      <span style="font-size:11px;color:#69707D">Each sends a RUM event to all active endpoints</span>
+    </div>
+    <div class="card-body">
+      <div class="action-grid">
+        <button class="action-btn primary"   onclick="searchProducts()">🔍 Search</button>
+        <button class="action-btn secondary" onclick="loadHomepage()">🏠 Page Load</button>
+        <button class="action-btn secondary" onclick="filterByCategory()">🏷 Filter</button>
+        <button class="action-btn secondary" onclick="userLogin()">👤 Login</button>
+        <button class="action-btn secondary" onclick="userLogout()">🚪 Logout</button>
+        <button class="action-btn secondary" onclick="viewRecommendations()">💡 Recommendations</button>
+        <button class="action-btn warn"      onclick="slowTransaction()">🐢 Slow TX (2s)</button>
+        <button class="action-btn warn"      onclick="cacheHit()">⚡ Cache Hit</button>
+        <button class="action-btn secondary" onclick="apiRetry()">🔄 API Retry</button>
+        <button class="action-btn danger"    onclick="triggerError()">💥 JS Error</button>
+        <button class="action-btn danger"    onclick="networkTimeout()">⏱ Timeout Error</button>
+        <button class="action-btn success"   onclick="checkout()">💳 Checkout</button>
+      </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e0e6ed">
+        <div style="font-size:10px;font-weight:600;color:#69707D;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Standalone-only (no demo required)</div>
+        <div class="action-grid">
+        <button class="action-btn purple" onclick="standaloneDashboardLoad()">📊 Dashboard load</button>
+        <button class="action-btn purple" onclick="standaloneFormSubmit()">📝 Form submit</button>
+        <button class="action-btn purple" onclick="standaloneWebSocket()">🔌 WebSocket</button>
+        <button class="action-btn purple" onclick="standaloneInfiniteScroll()">↕ Infinite scroll</button>
+      </div>
+
+        </div>
+      </div>
+      <!-- Burst mode -->
+      <div class="burst-row" style="margin-top:12px;padding-top:10px;border-top:1px solid #f0f4f8">
+        <label>Burst:</label>
+        <input type="range" id="burst-count" min="5" max="100" value="20" step="5" oninput="document.getElementById('burst-val').textContent=this.value">
+        <span id="burst-val">20</span> events
+        <button onclick="burstEvents()">▶ Send burst</button>
+      </div>
+
+      <!-- Custom event -->
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f4f8">
+        <div style="font-size:11px;font-weight:600;color:#69707D;margin-bottom:6px">Custom event</div>
+        <div class="custom-row">
+          <input type="text" id="custom-name" placeholder="Transaction name (e.g. GET /api/v2/orders)" value="GET /api/custom">
+          <select id="custom-type">
+            <option value="user-interaction">user-interaction</option>
+            <option value="page-load">page-load</option>
+            <option value="http-request">http-request</option>
+            <option value="navigation">navigation</option>
+            <option value="custom">custom</option>
+          </select>
+          <button onclick="sendCustomEvent()">Send</button>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><div class="val" id="tx-count">0</div><div class="lbl">Transactions</div></div>
+        <div class="metric"><div class="val" id="span-count">0</div><div class="lbl">Spans</div></div>
+        <div class="metric"><div class="val" id="err-count">0</div><div class="lbl">Errors</div></div>
+        <div class="metric"><div class="val" id="fan-count">0</div><div class="lbl">Total POSTs</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Journeys -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🗺 User Journeys</span>
+      <span style="font-size:11px;color:#69707D">Multi-step flows with correlated trace IDs</span>
+    </div>
+    <div class="card-body">
+      <div class="journey-grid">
+        <button class="journey-btn" onclick="journeyNewVisitor()">
+          <div class="j-title">New visitor browse</div>
+          <div class="j-steps">page-load → search → view (×3) → add-to-cart</div>
+        </button>
+        <button class="journey-btn" onclick="journeyCheckout()">
+          <div class="j-title">Full purchase flow</div>
+          <div class="j-steps">login → browse → cart → payment → confirm</div>
+        </button>
+        <button class="journey-btn" onclick="journeySearchAbandoned()">
+          <div class="j-title">Abandoned search</div>
+          <div class="j-steps">search → filter → slow-load → timeout → exit</div>
+        </button>
+        <button class="journey-btn" onclick="journeyPowerUser()">
+          <div class="j-title">Power user session</div>
+          <div class="j-steps">login → 5× views → compare → bulk-checkout</div>
+        </button>
+        <button class="journey-btn" onclick="journeyMobileHeavy()">
+          <div class="j-title">Slow mobile session</div>
+          <div class="j-steps">slow page-load → cache-miss → 3× retries → error</div>
+        </button>
+        <button class="journey-btn" onclick="journeyAPIHeavy()">
+          <div class="j-title">API-heavy dashboard</div>
+          <div class="j-steps">5× parallel API calls → DB → cache → render</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Log -->
+  <div class="card full-width">
+    <div class="card-header">
+      <span class="card-title">📋 RUM Event Log</span>
+      <button onclick="clearLog()" style="font-size:11px;padding:2px 8px;border:1px solid #D3DAE6;border-radius:4px;background:white;cursor:pointer">Clear</button>
+    </div>
+    <div class="card-body">
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- Kibana Links -->
+  <div class="card full-width">
+    <div class="card-header"><span class="card-title">📊 View in Kibana</span></div>
+    <div class="card-body" id="kibana-links-body"></div>
+  </div>
+
+  <!-- Dependencies -->
+  <div class="card full-width">
+    <div class="card-header"><span class="card-title">🔗 Integration with OTel Demo app</span></div>
+    <div class="card-body">
+      <table class="dep-table">
+        <thead>
+          <tr><th>Path / port</th><th>What it is</th><th>RUM tool dependency</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>localhost:9211<br><span style="font-size:10px;color:#9095A0">(CORS proxy)</span></td>
+            <td><strong>RUM CORS proxy</strong> (rum-proxy.py). Accepts browser requests, adds CORS headers, then forwards server-side to Local APM and ECH ES1 APM — both of which block browser CORS because RUM is disabled by default.</td>
+            <td>EP1 in the tool. Start with: <code>python3 rum-proxy.py</code> from the OTEL directory. Required for browser → Local APM and browser → ECH ES1 to work.</td>
+            <td><span class="pill green">Run this first</span></td>
+          </tr>
+          <tr>
+            <td>localhost:8200<br><span style="font-size:10px;color:#9095A0">(elastic-agent APM)</span></td>
+            <td>Local APM server managed by elastic-agent Docker container. Accepts OTLP and RUM intake v2 — but browser CORS is blocked because RUM is not enabled in the Fleet policy.</td>
+            <td>Reached via the proxy only. Direct browser access blocked by CORS. To enable direct access: turn on RUM in Fleet → APM integration → enable RUM → allow origins: *</td>
+            <td><span class="pill orange">Via proxy only</span></td>
+          </tr>
+          <tr>
+            <td>c204b3ce….apm.cloud.es.io<br><span style="font-size:10px;color:#9095A0">(ECH ES1 APM)</span></td>
+            <td>ECH ES1 APM server in GCP us-central1. Bearer token auth. Browser CORS blocked — RUM must be enabled in the deployment settings for direct access.</td>
+            <td>Reached via the proxy. Auth header is added server-side by the proxy, so no secret in the browser.</td>
+            <td><span class="pill orange">Via proxy only</span></td>
+          </tr>
+          <tr>
+            <td>localhost:8080</td>
+            <td>OTel demo app frontend (React). Served by the demo's <code>frontend</code> container.</td>
+            <td>Optional: fetch calls to this origin create distributed traces linking RUM to backend spans. Add to <code>distributedTracingOrigins</code>.</td>
+            <td><span class="pill orange">Optional correlation</span></td>
+          </tr>
+          <tr>
+            <td>localhost:4317 / 4318</td>
+            <td>OTel collector inside the demo stack. Accepts OTLP gRPC / HTTP.</td>
+            <td>Not used by RUM tool directly. The browser cannot reach gRPC. Use OTLP HTTP on 4318 if switching to OTel JS SDK.</td>
+            <td><span class="pill gray">Not used</span></td>
+          </tr>
+          <tr>
+            <td>localhost:4320</td>
+            <td>EDOT otelcol inside elastic-agent (Flow 5). Accepts OTLP gRPC.</td>
+            <td>Not reachable from browser. Relevant only for backend / server-side instrumentation.</td>
+            <td><span class="pill gray">Not used</span></td>
+          </tr>
+          <tr>
+            <td>*.ingest.*.elastic.cloud</td>
+            <td>ECH / serverless managed OTLP input. Accepts OTLP HTTP only.</td>
+            <td>Serverless has no RUM intake. ECH managed OTLP accepts OTLP, not APM intake v2. Cannot be used by this RUM tool.</td>
+            <td><span class="pill gray">Not compatible</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="padding:10px;background:#D4F5F3;border-radius:6px;font-size:12px;color:#005151;line-height:1.6">
+          <strong>Fully standalone (no demo needed):</strong><br>
+          All actions except "Demo app integration" mode generate synthetic APM events and POST directly
+          to whichever APM endpoints are enabled. The OTel demo app does not need to be running.
+          Works with just a local APM server (port 8200) or ECH APM server.
+        </div>
+        <div style="padding:10px;background:#FFF3D6;border-radius:6px;font-size:12px;color:#5A3D00;line-height:1.6">
+          <strong>Demo app integration (optional):</strong><br>
+          Enable the toggle in the config bar to have the <em>Recommendations</em> action also fetch
+          <code>localhost:8080/api/recommendations</code> with a <code>traceparent</code> header.
+          When the OTel demo is running, this correlates browser spans to backend microservice spans
+          in the APM Service Map.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<footer style="text-align:center;padding:16px 24px 24px;font-size:12px;color:#69707D;border-top:1px solid #D3DAE6;margin-top:8px;background:white">
+  Built by <strong style="color:#343741">Rahul Ranjan</strong> · Elastic Support ·
+  <span style="opacity:.6">OTel Ingest Lab — RUM multi-endpoint demo</span>
+  <span id="footer-proxy-badge" style="margin-left:16px;padding:3px 9px;border-radius:10px;font-size:11px;background:#F0F0F0;color:#69707D">
+    Proxy: checking...
+  </span>
+</footer>
+
+<script>
+const SERVICE_NAME = 'rum-demo';
+const SERVICE_VERSION = '2.0.0';
+const ENVIRONMENT = 'lab';
+
+// All APM servers block browser CORS — routed via rum-proxy.py on :9211.
+// RUM intake requires NO auth — secret tokens are for APM agents, not browsers.
+const PROXY_URL = 'http://localhost:9211';
+
+// Blank — user fills these in on first run via the setup overlay.
+const EMPTY_EP = { name: '', url: '', auth: '', kibana: '', viaProxy: true, enabled: false };
+const DEFAULTS = [ { ...EMPTY_EP }, { ...EMPTY_EP }, { ...EMPTY_EP } ];
+
+let endpoints = loadEndpoints();
+let txCount = 0, spanCount = 0, errCount = 0, fanCount = 0;
+let autoInterval = null;
+let demoIntegration = false;
+
+function setDemoIntegration(val) {
+  demoIntegration = val;
+  const badge = document.getElementById('standalone-badge');
+  badge.style.display = val ? 'none' : '';
+  log('info', val
+    ? 'Demo app integration ON — Recommendations will fetch localhost:8080 for real distributed traces.'
+    : 'Standalone mode — all traces are synthetic, no dependency on OTel demo app.');
+}
+let cart = [];
+let epStatus = endpoints.map(() => ({ code: null }));
+
+function loadEndpoints() {
+  try { const s = localStorage.getItem('rum_endpoints_v2'); return s ? JSON.parse(s) : JSON.parse(JSON.stringify(DEFAULTS)); }
+  catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
+}
+function saveEndpoints() { localStorage.setItem('rum_endpoints_v2', JSON.stringify(endpoints)); }
+
+// ── Intake helpers ────────────────────────────────────────────────────────
+function randomHex(bytes) {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes))).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
+  traceId = traceId || randomHex(16);
+  txId    = txId    || randomHex(8);
+  const ts = Date.now() * 1000;
+  const totalDur = spans.length ? Math.max(...spans.map(s=>(s.offset||0)+s.duration))+20 : 250;
+
+  const lines = [
+    JSON.stringify({ metadata: { service: { name: SERVICE_NAME, version: SERVICE_VERSION, environment: ENVIRONMENT, agent: { name: 'rum-js', version: '5.14.0' }, language: { name: 'javascript' } }}}),
+    JSON.stringify({ transaction: { id: txId, trace_id: traceId, name: txName, type: txType, duration: totalDur, result: captureErr ? 'error' : 'success', sampled: true, span_count: { started: spans.length, dropped: 0 }, timestamp: ts }})
+  ];
+  spans.forEach(s => {
+    lines.push(JSON.stringify({ span: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, name: s.name, type: s.type, subtype: s.subtype||null, start: s.offset||0, duration: s.duration, timestamp: ts+(s.offset||0)*1000, labels: s.labels||undefined }}));
+  });
+  if (captureErr) {
+    lines.push(JSON.stringify({ error: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, exception: { message: captureErr.message, type: 'Error' }, timestamp: ts }}));
+  }
+  return { body: lines.join('\n'), traceId, txId };
+}
+
+function sendRUM(txName, txType, spans=[], captureErr=null, traceId=null, txId=null, silent=false) {
+  const active = endpoints.filter(ep => ep.enabled && ep.url);
+  if (!active.length) { log('error', 'No active endpoints — enable at least one above.'); return null; }
+  const payload = buildPayload(txName, txType, spans, captureErr, traceId, txId);
+  if (!silent) {
+    log('tx', `[${new Date().toLocaleTimeString()}] TX: ${txName} (${txType})`);
+    spans.forEach(s => log('span', `  ↳ ${s.name}  <span style="color:#69707D;font-size:10px">${s.type}${s.subtype?'/'+s.subtype:''} ${s.duration}ms</span>`));
+  }
+  active.forEach(ep => {
+    const i = endpoints.indexOf(ep);
+    // All APM servers block browser CORS — route via local proxy with X-Target-Url header.
+    // Direct fetch is only used when viaProxy is explicitly false (e.g. a custom server
+    // with RUM CORS enabled).
+    const useProxy = ep.viaProxy !== false;
+    const fetchUrl = useProxy
+      ? PROXY_URL + '/intake/v2/events'
+      : ep.url + '/intake/v2/events';
+    const headers = { 'Content-Type': 'application/x-ndjson' };
+    if (useProxy) {
+      headers['X-Target-Url']  = ep.url;
+      if (ep.auth) headers['X-Target-Auth'] = ep.auth;
+    } else {
+      if (ep.auth) headers['Authorization'] = ep.auth;
+    }
+    fetch(fetchUrl, { method: 'POST', mode: 'cors', headers, body: payload.body })
+      .then(async r => {
+        epStatus[i] = { code: r.status };
+        fanCount++;
+        const ok = r.status >= 200 && r.status < 300;
+        if (!silent) {
+          const via = useProxy ? ' <span style="color:#69707D;font-size:10px">(via proxy)</span>' : '';
+          log('fan', `  → ${ep.name}${via}: <span class="${ok?'log-ok':'log-err'}">${r.status} ${ok?'✓':'✗'}</span>`);
+        }
+        updateEpDots(); updateConfigStatuses(); updateMetrics();
+      })
+      .catch(() => {
+        epStatus[i] = { code: 'err' };
+        if (!silent) {
+          const hint = useProxy
+            ? ' — is rum-proxy.py running? Run: <code>python3 rum-proxy.py</code>'
+            : ' — CORS/net error';
+          log('fan', `  → ${ep.name}: <span class="log-err">failed${hint}</span>`);
+        }
+        updateEpDots(); updateConfigStatuses();
+      });
+  });
+  txCount++; spanCount += spans.length; if (captureErr) errCount++;
+  updateMetrics();
+  return payload.traceId;
+}
+
+// ── Basic actions ─────────────────────────────────────────────────────────
+function viewProduct(id, name, price) {
+  sendRUM(`view:${name}`, 'user-interaction', [
+    { name: 'fetch-product-details', type: 'http', subtype: 'fetch', offset: 0, duration: Math.floor(Math.random()*200+80), labels: { 'product.id': id, 'product.price': price } },
+    { name: 'render-product-page',   type: 'ui',   subtype: 'render', offset: 210, duration: 30 }
+  ]);
+  addToCart(name, price);
+}
+
+function searchProducts() {
+  const q = ['telescope','headphones','camera','4k monitor','wireless keyboard'][Math.floor(Math.random()*5)];
+  sendRUM(`search:"${q}"`, 'user-interaction', [
+    { name: 'search-api',      type: 'http', subtype: 'fetch',  offset: 0,   duration: 150 },
+    { name: 'cache-lookup',    type: 'cache', subtype: 'redis', offset: 0,   duration: 8   },
+    { name: 'render-results',  type: 'ui',   subtype: 'render', offset: 160, duration: 45  }
+  ]);
+}
+
+function loadHomepage() {
+  sendRUM('/', 'page-load', [
+    { name: 'dns-lookup',      type: 'resource', subtype: 'script', offset: 0,   duration: 40  },
+    { name: 'fetch-featured',  type: 'http',     subtype: 'fetch',  offset: 50,  duration: 120 },
+    { name: 'fetch-banner',    type: 'http',     subtype: 'fetch',  offset: 55,  duration: 90  },
+    { name: 'load-assets',     type: 'resource', subtype: 'img',    offset: 80,  duration: 200 },
+    { name: 'first-contentful-paint', type: 'marks', subtype: 'fcp', offset: 310, duration: 5 }
+  ]);
+}
+
+function filterByCategory() {
+  const cat = ['Electronics','Cameras','Audio','Computers','Wearables'][Math.floor(Math.random()*5)];
+  sendRUM(`filter:${cat}`, 'user-interaction', [
+    { name: 'filter-api',      type: 'http',   subtype: 'fetch', offset: 0, duration: Math.floor(Math.random()*200+50) },
+    { name: 'update-url-hash', type: 'navigation', offset: 5, duration: 2 }
+  ]);
+}
+
+function userLogin() {
+  sendRUM('POST /login', 'user-interaction', [
+    { name: 'auth-api',       type: 'http', subtype: 'fetch', offset: 0,   duration: 200 },
+    { name: 'session-create', type: 'db',   subtype: 'sqlite', offset: 210, duration: 30  },
+    { name: 'token-store',    type: 'cache', subtype: 'localStorage', offset: 250, duration: 2 }
+  ]);
+}
+
+function userLogout() {
+  sendRUM('POST /logout', 'user-interaction', [
+    { name: 'invalidate-session', type: 'http', subtype: 'fetch', offset: 0, duration: 80 },
+    { name: 'clear-local-storage', type: 'cache', subtype: 'localStorage', offset: 90, duration: 1 }
+  ]);
+}
+
+function viewRecommendations() {
+  const traceId     = randomHex(16);
+  const txId        = randomHex(8);
+  const traceparent = `00-${traceId}-${txId}-01`;
+  if (demoIntegration) {
+    // Real fetch to demo app — creates an actual distributed trace if demo is running
+    log('tx', `[${new Date().toLocaleTimeString()}] TX: GET /api/recommendations (demo distributed trace)`);
+    log('span', `  ↳ traceparent: <span style="color:#F5A700;font-size:10px">${traceparent}</span>`);
+    fetch('http://localhost:8080/api/recommendations', {
+      headers: { traceparent, 'Accept': 'application/json' }
+    }).then(r => log('span', `  ↳ demo-app /api/recommendations: <span class="${r.ok?'log-ok':'log-err'}">${r.status}</span>`))
+      .catch(() => log('span', '  ↳ demo-app not reachable — enable demo integration only when demo is running'));
+  }
+  // APM event is always sent (standalone)
+  sendRUM('GET /api/recommendations', 'http-request', [
+    { name: 'recommendations-api', type: 'http', subtype: 'fetch', offset: 0, duration: 180 },
+    { name: 'ml-scoring',          type: 'custom', offset: 0, duration: 120 },
+    { name: 'rank-results',        type: 'custom', offset: 130, duration: 40 }
+  ], null, traceId, txId);
+}
+
+// ── Standalone-only scenarios (no demo dependency) ────────────────────────
+function standaloneDashboardLoad() {
+  sendRUM('/dashboard', 'page-load', [
+    { name: 'fetch-user-prefs',  type: 'http',  subtype: 'fetch',    offset: 0,   duration: 90  },
+    { name: 'fetch-recent-orders',type:'http',  subtype: 'fetch',    offset: 0,   duration: 140 },
+    { name: 'fetch-banner-ads',  type: 'http',  subtype: 'fetch',    offset: 0,   duration: 200 },
+    { name: 'init-analytics',    type: 'custom',                     offset: 210, duration: 30  },
+    { name: 'render-widgets',    type: 'ui',    subtype: 'render',   offset: 240, duration: 80  }
+  ]);
+}
+
+function standaloneFormSubmit() {
+  sendRUM('POST /profile/update', 'user-interaction', [
+    { name: 'validate-form',    type: 'custom',                    offset: 0,   duration: 5   },
+    { name: 'upload-avatar',    type: 'http',   subtype: 'fetch',  offset: 6,   duration: 600 },
+    { name: 'save-profile',     type: 'http',   subtype: 'fetch',  offset: 6,   duration: 180 },
+    { name: 'email-notify',     type: 'messaging', subtype: 'smtp', offset: 200, duration: 120 },
+    { name: 'refresh-ui',       type: 'ui',     subtype: 'render', offset: 720, duration: 25  }
+  ]);
+}
+
+function standaloneWebSocket() {
+  sendRUM('WS /live-prices', 'user-interaction', [
+    { name: 'ws-handshake',      type: 'websocket', offset: 0,   duration: 80  },
+    { name: 'subscribe-ticker',  type: 'custom',    offset: 90,  duration: 10  },
+    { name: 'recv-15-messages',  type: 'custom',    offset: 100, duration: 3000 },
+    { name: 'update-dom',        type: 'ui', subtype: 'render', offset: 3110, duration: 12 }
+  ]);
+}
+
+function standaloneInfiniteScroll() {
+  const page = Math.floor(Math.random() * 5) + 2;
+  sendRUM(`GET /products?page=${page}`, 'user-interaction', [
+    { name: 'intersection-observer', type: 'custom',              offset: 0,  duration: 2   },
+    { name: `fetch-page-${page}`,    type: 'http', subtype:'fetch', offset: 5, duration: 180 },
+    { name: 'append-dom-nodes',      type: 'ui',   subtype:'render', offset: 190, duration: 45 },
+    { name: 'lazy-load-images',      type: 'resource', subtype:'img', offset: 240, duration: 350 }
+  ]);
+}
+
+function slowTransaction() {
+  log('info', 'Slow TX in progress (2s simulated)…');
+  sendRUM('GET /api/slow-query', 'http-request', [
+    { name: 'db-query-full-scan',  type: 'db',   subtype: 'postgres', offset: 0,    duration: 1800 },
+    { name: 'missing-index-scan',  type: 'db',   subtype: 'postgres', offset: 0,    duration: 1600 },
+    { name: 'result-serialize',    type: 'custom', offset: 1810, duration: 120 }
+  ]);
+}
+
+function cacheHit() {
+  sendRUM('GET /api/product-list', 'http-request', [
+    { name: 'redis-cache-hit', type: 'cache', subtype: 'redis', offset: 0, duration: 2 },
+    { name: 'serialize-json',  type: 'custom', offset: 3, duration: 5 }
+  ]);
+}
+
+function apiRetry() {
+  sendRUM('POST /api/inventory (retry)', 'http-request', [
+    { name: 'attempt-1-timeout',  type: 'http', subtype: 'fetch', offset: 0,    duration: 500, labels: { attempt: 1, result: 'timeout' } },
+    { name: 'attempt-2-timeout',  type: 'http', subtype: 'fetch', offset: 510,  duration: 500, labels: { attempt: 2, result: 'timeout' } },
+    { name: 'attempt-3-success',  type: 'http', subtype: 'fetch', offset: 1020, duration: 180, labels: { attempt: 3, result: 'success' } }
+  ]);
+}
+
+function triggerError() {
+  sendRUM('error-scenario', 'user-interaction', [], new Error('RUM demo: uncaught TypeError: cannot read property "id" of undefined'));
+}
+
+function networkTimeout() {
+  sendRUM('POST /checkout', 'user-interaction', [
+    { name: 'payment-gateway', type: 'http', subtype: 'fetch', offset: 0, duration: 5000 }
+  ], new Error('NetworkError: request timed out after 5000ms'));
+}
+
+function checkout() {
+  if (!cart.length) {
+    ['Telescope Pro','Headphones X1','Camera Ultra'].forEach(n => cart.push({ name: n, price: '$'+Math.floor(Math.random()*500+50) }));
+    renderCart();
+  }
+  sendRUM('POST /checkout', 'user-interaction', [
+    { name: 'validate-cart',    type: 'http', subtype: 'fetch', offset: 0,   duration: 100 },
+    { name: 'inventory-check',  type: 'http', subtype: 'fetch', offset: 0,   duration: 80  },
+    { name: 'payment-process',  type: 'http', subtype: 'fetch', offset: 110, duration: 400 },
+    { name: 'send-confirmation',type: 'messaging', subtype: 'kafka', offset: 520, duration: 60 },
+    { name: 'order-confirm-ui', type: 'ui',   subtype: 'render', offset: 590, duration: 30  }
+  ]);
+  setTimeout(() => { cart = []; renderCart(); log('info', 'Checkout complete!'); }, 700);
+}
+
+function sendCustomEvent() {
+  const name = document.getElementById('custom-name').value.trim() || 'custom-event';
+  const type = document.getElementById('custom-type').value;
+  sendRUM(name, type, [
+    { name: name + ' (span)', type: 'http', offset: 0, duration: Math.floor(Math.random()*300+50) }
+  ]);
+}
+
+function burstEvents() {
+  const n = parseInt(document.getElementById('burst-count').value, 10);
+  const burstTraceId = randomHex(16);
+  log('info', `Sending burst of ${n} events (same trace: ${burstTraceId.slice(0,8)}…)`);
+  const types = ['search','view','click','scroll','filter','hover'];
+  for (let i = 0; i < n; i++) {
+    setTimeout(() => {
+      const t = types[i % types.length];
+      sendRUM(`${t}-${i}`, 'user-interaction',
+        [{ name: `${t}-span`, type: 'ui', offset: 0, duration: Math.floor(Math.random()*100+10) }],
+        null, burstTraceId, null, true);
+    }, i * 40);
+  }
+  setTimeout(() => log('info', `Burst of ${n} done.`), n * 40 + 200);
+}
+
+// ── User Journeys ─────────────────────────────────────────────────────────
+function journeyNewVisitor() {
+  const jid = randomHex(16);
+  log('journey', `▶ Journey: New visitor browse [trace:${jid.slice(0,8)}]`);
+  let t = 0;
+  const step = (fn, delay) => { setTimeout(() => { fn(); }, t += delay); };
+  step(loadHomepage, 0);
+  step(searchProducts, 1200);
+  step(() => viewProduct('telescope','Telescope Pro','$349'), 800);
+  step(() => viewProduct('camera','Camera Ultra','$699'), 600);
+  step(() => viewProduct('headphones','Headphones X1','$129'), 700);
+}
+
+function journeyCheckout() {
+  const jid = randomHex(16);
+  log('journey', `▶ Journey: Full purchase flow [trace:${jid.slice(0,8)}]`);
+  let t = 0;
+  [userLogin, searchProducts, () => viewProduct('monitor','4K Monitor','$549'), filterByCategory, checkout]
+    .forEach(fn => { setTimeout(fn, t += 800); });
+}
+
+function journeySearchAbandoned() {
+  const jid = randomHex(16);
+  log('journey', `▶ Journey: Abandoned search [trace:${jid.slice(0,8)}]`);
+  let t = 0;
+  [loadHomepage, searchProducts, filterByCategory, slowTransaction, networkTimeout]
+    .forEach(fn => { setTimeout(fn, t += 1000); });
+}
+
+function journeyPowerUser() {
+  const jid = randomHex(16);
+  log('journey', `▶ Journey: Power user session [trace:${jid.slice(0,8)}]`);
+  let t = 0;
+  [userLogin,
+    () => viewProduct('telescope','Telescope Pro','$349'),
+    () => viewProduct('camera','Camera Ultra','$699'),
+    () => viewProduct('headphones','Headphones X1','$129'),
+    () => viewProduct('keyboard','Mechanical KB','$89'),
+    () => viewProduct('monitor','4K Monitor','$549'),
+    viewRecommendations, checkout
+  ].forEach(fn => { setTimeout(fn, t += 500); });
+}
+
+function journeyMobileHeavy() {
+  const jid = randomHex(16);
+  log('journey', `▶ Journey: Slow mobile session [trace:${jid.slice(0,8)}]`);
+  let t = 0;
+  [loadHomepage, cacheHit, apiRetry, slowTransaction, networkTimeout, triggerError]
+    .forEach(fn => { setTimeout(fn, t += 900); });
+}
+
+function journeyAPIHeavy() {
+  const jid = randomHex(16);
+  log('journey', `▶ Journey: API-heavy dashboard [trace:${jid.slice(0,8)}]`);
+  log('info', 'Firing 5 parallel API calls…');
+  [
+    ['GET /api/orders',       [{ name:'orders-db',  type:'db',    subtype:'postgres', offset:0, duration:120 }]],
+    ['GET /api/inventory',    [{ name:'inv-cache',  type:'cache', subtype:'redis',    offset:0, duration:8   }]],
+    ['GET /api/user-profile', [{ name:'profile-db', type:'db',    subtype:'postgres', offset:0, duration:90  }]],
+    ['GET /api/analytics',    [{ name:'analytics',  type:'http',  subtype:'fetch',    offset:0, duration:250 }]],
+    ['GET /api/notifications',[{ name:'notify-db',  type:'db',    subtype:'postgres', offset:0, duration:60  }]],
+  ].forEach(([name, spans]) => sendRUM(name, 'http-request', spans, null, jid, null, false));
+}
+
+// ── Auto simulation ───────────────────────────────────────────────────────
+const autoActions = [
+  searchProducts, loadHomepage, filterByCategory, userLogin, cacheHit,
+  () => viewProduct('telescope','Telescope Pro','$349'),
+  () => viewProduct('headphones','Headphones X1','$129'),
+  () => viewProduct('camera','Camera Ultra','$699'),
+  checkout, viewRecommendations,
+  standaloneDashboardLoad, standaloneFormSubmit, standaloneInfiniteScroll
+];
+
+function toggleAuto() {
+  const tog = document.getElementById('auto-toggle');
+  if (autoInterval) {
+    clearInterval(autoInterval); autoInterval = null;
+    tog.classList.remove('on'); log('info', 'Auto-simulation stopped');
+  } else {
+    tog.classList.add('on'); log('info', 'Auto-simulation started (every 3s)');
+    autoInterval = setInterval(() => autoActions[Math.floor(Math.random()*autoActions.length)](), 3000);
+  }
+}
+
+// ── Cart ──────────────────────────────────────────────────────────────────
+function addToCart(name, price) { cart.push({ name, price }); renderCart(); }
+function renderCart() {
+  const el = document.getElementById('cart-items');
+  document.getElementById('cart-count').textContent = `(${cart.length})`;
+  if (!cart.length) { el.innerHTML = '<div class="empty-cart">Cart is empty — click products to add</div>'; return; }
+  el.innerHTML = cart.map(i => `<div class="cart-item"><span class="item-name">${i.name}</span><span class="item-qty">${i.price}</span></div>`).join('');
+}
+
+// ── Config panel ──────────────────────────────────────────────────────────
+function toggleConfig() {
+  const panel = document.getElementById('config-panel');
+  const btn   = document.getElementById('config-toggle');
+  const open  = panel.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? '✕ Close' : '⚙ Edit endpoints';
+  if (open) renderConfigRows();
+}
+
+function renderConfigRows() {
+  const grid = document.getElementById('ep-config-grid');
+  const hdrs = [...grid.querySelectorAll('.col-hdr')];
+  grid.innerHTML = '';
+  hdrs.forEach(h => grid.appendChild(h));
+  endpoints.forEach((ep, i) => {
+    const st = epStatus[i];
+    const cls = st.code === null ? 'idle' : (st.code >= 200 && st.code < 300 ? 'ok' : 'err');
+    const proxyChecked = ep.viaProxy !== false ? 'checked' : '';
+    grid.innerHTML += `
+      <div class="ep-num" style="display:flex;flex-direction:column;gap:3px;align-items:center">
+        EP${i+1}
+        <label style="font-size:9px;color:#69707D;display:flex;align-items:center;gap:2px;cursor:pointer" title="Route via local proxy (needed for CORS)">
+          <input type="checkbox" id="cfg-proxy-${i}" ${proxyChecked} style="width:10px;height:10px">proxy
+        </label>
+      </div>
+      <input type="text" id="cfg-name-${i}" value="${esc(ep.name)}" placeholder="Label">
+      <input type="text" id="cfg-url-${i}"  value="${esc(ep.url)}"  placeholder="https://... APM server URL">
+      <input type="text" id="cfg-auth-${i}" value="${esc(ep.auth)}" placeholder="(blank for RUM)">
+      <span class="status-badge ${cls}">${st.code ?? '—'}</span>`;
+  });
+}
+
+function updateConfigStatuses() {
+  if (!document.getElementById('config-panel').classList.contains('open')) return;
+  document.getElementById('ep-config-grid').querySelectorAll('.status-badge').forEach((b, i) => {
+    const st = epStatus[i];
+    b.className = 'status-badge ' + (st.code === null ? 'idle' : st.code >= 200 && st.code < 300 ? 'ok' : 'err');
+    b.textContent = st.code ?? '—';
+  });
+}
+
+function applyConfig() {
+  endpoints.forEach((ep, i) => {
+    const n = document.getElementById(`cfg-name-${i}`)?.value.trim();
+    const u = document.getElementById(`cfg-url-${i}`)?.value.trim();
+    const a = document.getElementById(`cfg-auth-${i}`)?.value.trim();
+    const p = document.getElementById(`cfg-proxy-${i}`);
+    if (n !== undefined) ep.name     = n;
+    if (u !== undefined) ep.url      = u.replace(/\/$/, '');
+    if (a !== undefined) ep.auth     = a;
+    if (p !== null)      ep.viaProxy = p.checked;
+  });
+  saveEndpoints(); renderChecks(); renderEpDots(); renderKibanaLinks();
+  log('info', 'Endpoint config applied.');
+}
+
+function resetConfig() {
+  if (!confirm('Clear all saved endpoints and show setup screen?')) return;
+  localStorage.removeItem('rum_endpoints_v2');
+  endpoints = DEFAULTS.map(e => ({ ...e }));
+  epStatus  = endpoints.map(() => ({ code: null }));
+  renderChecks(); renderEpDots(); renderKibanaLinks();
+  // reset setup overlay
+  setupSlotCount = 0;
+  document.getElementById('setup-slots').innerHTML = '';
+  document.getElementById('setup-add-btn').style.display = '';
+  showSetup();
+  setupAddSlot();
+}
+
+function esc(s) { return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ── Header dots ───────────────────────────────────────────────────────────
+function renderEpDots() {
+  document.getElementById('ep-dots').innerHTML = endpoints.map((ep, i) => {
+    const st  = epStatus[i];
+    const cls = !ep.enabled ? '' : st.code === null ? 'pending' : st.code >= 200 && st.code < 300 ? 'ok' : 'err';
+    return `<div class="ep-dot-row"><div class="dot ${cls}"></div><span>${ep.name}</span></div>`;
+  }).join('');
+}
+
+function updateEpDots() {
+  document.getElementById('ep-dots').querySelectorAll('.dot').forEach((d, i) => {
+    const st = epStatus[i]; const ep = endpoints[i];
+    d.className = 'dot ' + (!ep?.enabled ? '' : st.code === null ? 'pending' : st.code >= 200 && st.code < 300 ? 'ok' : 'err');
+  });
+}
+
+// ── Config bar checkboxes ─────────────────────────────────────────────────
+function renderChecks() {
+  document.getElementById('ep-checks').innerHTML = endpoints.map((ep, i) =>
+    `<label class="ep-check-item"><input type="checkbox" ${ep.enabled?'checked':''} onchange="toggleEp(${i},this.checked)">${ep.name||'EP'+(i+1)}</label>`
+  ).join('');
+}
+
+function toggleEp(i, val) { endpoints[i].enabled = val; saveEndpoints(); renderEpDots(); }
+
+// ── Kibana links ──────────────────────────────────────────────────────────
+function renderKibanaLinks() {
+  const body = document.getElementById('kibana-links-body');
+  const cols = endpoints.filter(ep => ep.kibana);
+  if (!cols.length) { body.innerHTML = '<span style="font-size:13px;color:#69707D">No Kibana URLs configured.</span>'; return; }
+  body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:16px">` +
+    cols.map(ep => `<div>
+      <div style="font-size:13px;font-weight:600;color:#343741;margin-bottom:6px">${ep.name}</div>
+      <div class="kibana-links">
+        <a class="kib-link" href="${ep.kibana}/app/ux?rangeFrom=now-15m&rangeTo=now" target="_blank">User Experience</a>
+        <a class="kib-link" href="${ep.kibana}/app/apm/services/${SERVICE_NAME}/overview" target="_blank">APM Service</a>
+        <a class="kib-link" href="${ep.kibana}/app/apm/services/${SERVICE_NAME}/transactions" target="_blank">Transactions</a>
+        <a class="kib-link" href="${ep.kibana}/app/apm/service-map" target="_blank">Service Map</a>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────
+function log(type, msg) {
+  const box = document.getElementById('log-box');
+  const d = document.createElement('div');
+  d.className = `log-line ${type}`; d.innerHTML = msg;
+  box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+function clearLog() { document.getElementById('log-box').innerHTML = ''; }
+function updateMetrics() {
+  document.getElementById('tx-count').textContent  = txCount;
+  document.getElementById('span-count').textContent = spanCount;
+  document.getElementById('err-count').textContent  = errCount;
+  document.getElementById('fan-count').textContent  = fanCount;
+}
+
+// ── First-run setup ───────────────────────────────────────────────────────
+let setupSlotCount = 0;
+
+function isConfigured() {
+  return endpoints.some(e => e.url && e.url.trim());
+}
+
+function showSetup() {
+  document.getElementById('setup-overlay').style.display = 'flex';
+}
+
+function hideSetup() {
+  document.getElementById('setup-overlay').style.display = 'none';
+}
+
+function setupAddSlot() {
+  if (setupSlotCount >= 3) return;
+  const i = setupSlotCount++;
+  const label = i === 0 ? 'Endpoint 1 <span style="color:#BD271E;font-size:10px">required</span>'
+                        : `Endpoint ${i+1} <span class="optional">optional</span>`;
+  const rmBtn = i > 0
+    ? `<button onclick="setupRemoveSlot(${i})" style="font-size:11px;padding:2px 8px;border:1px solid #D3DAE6;border-radius:4px;background:white;cursor:pointer;color:#69707D">Remove</button>`
+    : '';
+  const div = document.createElement('div');
+  div.className = 'setup-ep'; div.id = `setup-slot-${i}`;
+  div.innerHTML = `
+    <div class="setup-ep-label">${label}${rmBtn ? '<span style="margin-left:auto">'+rmBtn+'</span>' : ''}</div>
+    <label style="font-size:11px;color:#69707D">APM server URL</label>
+    <input type="text" id="setup-url-${i}" placeholder="http://localhost:8200  or  https://xxxx.apm.cloud.es.io" oninput="setupValidate()">
+    <div class="setup-ep-row" style="margin-top:6px">
+      <div><label>Kibana URL <span style="color:#98A2B3">(optional)</span></label>
+        <input type="text" id="setup-kb-${i}" placeholder="http://localhost:5601"></div>
+      <div><label>Name</label>
+        <input type="text" id="setup-name-${i}" placeholder="${['Local APM','ECH ES1','ECH ES2'][i]||'Custom'}" style="width:120px"></div>
+    </div>`;
+  document.getElementById('setup-slots').appendChild(div);
+  const addBtn = document.getElementById('setup-add-btn');
+  addBtn.style.display = setupSlotCount >= 3 ? 'none' : '';
+  setupValidate();
+}
+
+function setupRemoveSlot(i) {
+  const slot = document.getElementById(`setup-slot-${i}`);
+  if (slot) slot.remove();
+  // renumber remaining slots visually (keep ids intact; just hide the removed one)
+  setupSlotCount = Math.max(0, setupSlotCount - 1);
+  document.getElementById('setup-add-btn').style.display = setupSlotCount >= 3 ? 'none' : '';
+  setupValidate();
+}
+
+function setupValidate() {
+  // Check if slot 0 has a URL (slot 0 is always the first, but index might shift after removes)
+  const first = document.querySelector('#setup-slots .setup-ep input[id^="setup-url"]');
+  const hasOne = first && first.value.trim().length > 0;
+  document.getElementById('setup-save-btn').disabled = !hasOne;
+  document.getElementById('setup-err').style.display = 'none';
+}
+
+function saveSetup() {
+  const urlInputs = document.querySelectorAll('#setup-slots input[id^="setup-url-"]');
+  const first = urlInputs[0];
+  if (!first || !first.value.trim()) {
+    document.getElementById('setup-err').style.display = 'block';
+    return;
+  }
+  const newEndpoints = [];
+  urlInputs.forEach((inp, idx) => {
+    const i = inp.id.replace('setup-url-', '');
+    const url  = (inp.value || '').trim().replace(/\/$/, '');
+    const name = (document.getElementById(`setup-name-${i}`)?.value || '').trim() || `Endpoint ${idx+1}`;
+    const kb   = (document.getElementById(`setup-kb-${i}`)?.value || '').trim().replace(/\/$/, '');
+    if (url || idx === 0) newEndpoints.push({ name, url, auth: '', kibana: kb, viaProxy: true, enabled: !!url });
+  });
+  // pad to 3
+  while (newEndpoints.length < 3) newEndpoints.push({ ...EMPTY_EP });
+  endpoints = newEndpoints;
+  epStatus  = endpoints.map(() => ({ code: null }));
+  saveEndpoints();
+  renderChecks(); renderEpDots(); renderKibanaLinks();
+  hideSetup();
+  log('info', `Setup complete — ${endpoints.filter(e=>e.enabled&&e.url).length} endpoint(s) active.`);
+  setTimeout(loadHomepage, 400);
+}
+
+// ── Proxy status check ────────────────────────────────────────────────────
+async function checkProxy() {
+  const badge  = document.getElementById('footer-proxy-badge');
+  const note   = document.getElementById('setup-proxy-status');
+  try {
+    const r = await fetch(PROXY_URL, { method: 'GET', signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      const msg = '&#10003; Proxy connected';
+      if (badge) { badge.style.background = '#D4EDDA'; badge.style.color = '#1D6433'; badge.innerHTML = msg + ' · :9211'; }
+      if (note)  { note.innerHTML = '<span style="color:#1D6433">&#10003; CORS proxy running on :9211</span>'; }
+      return true;
+    }
+  } catch (_) {}
+  const cmd = '<code>cd ~/Desktop/OTEL &amp;&amp; python3 rum-proxy.py</code>';
+  if (badge) { badge.style.background = '#FCEEED'; badge.style.color = '#BD271E'; badge.innerHTML = '&#9888; Proxy offline'; }
+  if (note)  { note.innerHTML = '<strong style="color:#BD271E">&#9888; Proxy not running.</strong> Start it: ' + cmd + ' &nbsp;&middot;&nbsp; serve page: <code>python3 -m http.server 9210</code>'; }
+  return false;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  epStatus = endpoints.map(() => ({ code: null }));
+  renderChecks(); renderEpDots(); renderKibanaLinks();
+  checkProxy();
+  setInterval(checkProxy, 30000);
+  if (!isConfigured()) {
+    showSetup();
+    setupAddSlot();   // render slot 0 on first run
+  } else {
+    log('info', `Ready — ${endpoints.filter(e=>e.enabled&&e.url).length} endpoint(s) active.`);
+    setTimeout(loadHomepage, 600);
+  }
+});
+</script>
+</body>
+</html>
