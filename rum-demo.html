@@ -499,23 +499,117 @@ function randomHex(bytes) {
   return Array.from(crypto.getRandomValues(new Uint8Array(bytes))).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// Pool of realistic user-agents across browsers, OS, and device types.
+// Rotated per event so Kibana Visitor Breakdown shows real diversity.
+const UA_POOL = [
+  { original: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',          name: 'Chrome',  version: '124.0', os: { name: 'Windows', version: '10.0' } },
+  { original: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',     name: 'Chrome',  version: '123.0', os: { name: 'macOS',   version: '14.4.1' } },
+  { original: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile Safari/604.1', name: 'Safari', version: '17.4', os: { name: 'iOS', version: '17.4' } },
+  { original: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36', name: 'Chrome',  version: '124.0', os: { name: 'Android', version: '14' } },
+  { original: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',                                         name: 'Firefox', version: '125.0', os: { name: 'Windows', version: '10.0' } },
+  { original: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',       name: 'Safari',  version: '17.4',  os: { name: 'macOS',   version: '14.4' } },
+  { original: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',                   name: 'Chrome',  version: '124.0', os: { name: 'Linux',   version: '' } },
+  { original: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0', name: 'Edge', version: '124.0', os: { name: 'Windows', version: '10.0' } },
+];
+
+// Pool of public IPs from different regions/countries.
+// Passed as X-Sim-Ip → proxy forwards as X-Forwarded-For → APM server does geo-lookup.
+const GEO_IP_POOL = [
+  '8.8.8.8',        // US (Google DNS, Mountain View CA)
+  '216.58.194.78',  // US (Google, NYC area)
+  '151.101.1.69',   // US (Fastly, San Francisco)
+  '52.94.236.248',  // US (AWS us-east-1)
+  '13.35.0.1',      // US (AWS us-west-2)
+  '185.60.216.35',  // GB (Facebook London)
+  '77.234.42.1',    // DE (Frankfurt)
+  '163.172.0.1',    // FR (Paris, Scaleway)
+  '203.0.113.5',    // AU (TEST-NET, resolves as AU)
+  '103.21.244.0',   // SG (Cloudflare Singapore)
+  '202.12.27.33',   // JP (Tokyo, APNIC)
+  '200.19.96.1',    // BR (São Paulo)
+  '196.201.216.1',  // ZA (Johannesburg)
+  '5.62.56.1',      // IN (Mumbai, RIPE)
+  '91.108.4.0',     // NL (Amsterdam, Telegram)
+];
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function buildUserAgent() { return pickRandom(UA_POOL); }
+function buildSimIp()     { return pickRandom(GEO_IP_POOL); }
+
+// Simulate realistic Core Web Vital values for page-load transactions
+function buildMarks(totalDur) {
+  const ttfb = Math.floor(totalDur * 0.15);
+  const fcp  = Math.floor(totalDur * 0.35);
+  const lcp  = Math.floor(totalDur * 0.65);
+  const di   = Math.floor(totalDur * 0.75);
+  const dc   = totalDur;
+  return {
+    navigationTiming: { fetchStart: 0, responseStart: ttfb, domInteractive: di, domComplete: dc, loadEventEnd: dc + 10 },
+    agent: { timeToFirstByte: ttfb, domInteractive: di, domComplete: dc, firstContentfulPaint: fcp, largestContentfulPaint: lcp }
+  };
+}
+
+// Simulated page URLs matching transaction names
+const PAGE_URLS = {
+  '/': 'http://localhost:9210/',
+  '/dashboard': 'http://localhost:9210/dashboard',
+  '/products/featured': 'http://localhost:9210/products/featured',
+};
+function pageUrl(txName) {
+  return PAGE_URLS[txName] || `http://localhost:9210${txName.startsWith('/') ? txName : '/'+txName.split(' ')[0]}`;
+}
+
 function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
   traceId = traceId || randomHex(16);
   txId    = txId    || randomHex(8);
   const ts = Date.now() * 1000;
   const totalDur = spans.length ? Math.max(...spans.map(s=>(s.offset||0)+s.duration))+20 : 250;
+  const isPageLoad = txType === 'page-load';
+  const ua = buildUserAgent();
+  const simIp = buildSimIp();
+
+  const metadata = {
+    service: { name: SERVICE_NAME, version: SERVICE_VERSION, environment: ENVIRONMENT, agent: { name: 'rum-js', version: '5.14.0' }, language: { name: 'javascript' } },
+    user_agent: ua
+  };
+
+  const txContext = {
+    page: { url: pageUrl(txName), referrer: '' },
+    user_agent: ua,
+    tags: { lab: 'rum-demo' }
+  };
+
+  const tx = {
+    id: txId, trace_id: traceId, name: txName, type: txType,
+    duration: totalDur, result: captureErr ? 'error' : 'success',
+    sampled: true, span_count: { started: spans.length, dropped: 0 },
+    timestamp: ts, context: txContext
+  };
+
+  if (isPageLoad) {
+    tx.marks = buildMarks(totalDur);
+    // Simulated Core Web Vitals — realistic lab values
+    tx.experience = {
+      cls:  parseFloat((Math.random() * 0.08).toFixed(3)),
+      fid:  Math.floor(Math.random() * 80 + 10),
+      lcp:  Math.floor(totalDur * 0.65),
+      tbt:  Math.floor(Math.random() * 150 + 20)
+    };
+  }
 
   const lines = [
-    JSON.stringify({ metadata: { service: { name: SERVICE_NAME, version: SERVICE_VERSION, environment: ENVIRONMENT, agent: { name: 'rum-js', version: '5.14.0' }, language: { name: 'javascript' } }}}),
-    JSON.stringify({ transaction: { id: txId, trace_id: traceId, name: txName, type: txType, duration: totalDur, result: captureErr ? 'error' : 'success', sampled: true, span_count: { started: spans.length, dropped: 0 }, timestamp: ts }})
+    JSON.stringify({ metadata }),
+    JSON.stringify({ transaction: tx })
   ];
   spans.forEach(s => {
     lines.push(JSON.stringify({ span: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, name: s.name, type: s.type, subtype: s.subtype||null, start: s.offset||0, duration: s.duration, timestamp: ts+(s.offset||0)*1000, labels: s.labels||undefined }}));
   });
   if (captureErr) {
-    lines.push(JSON.stringify({ error: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, exception: { message: captureErr.message, type: 'Error' }, timestamp: ts }}));
+    const errCtx = { page: txContext.page, user_agent: ua };
+    lines.push(JSON.stringify({ error: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, exception: { message: captureErr.message, type: 'Error' }, timestamp: ts, context: errCtx }}));
   }
-  return { body: lines.join('\n'), traceId, txId };
+  return { body: lines.join('\n'), traceId, txId, simIp };
 }
 
 function sendRUM(txName, txType, spans=[], captureErr=null, traceId=null, txId=null, silent=false) {
@@ -539,6 +633,7 @@ function sendRUM(txName, txType, spans=[], captureErr=null, traceId=null, txId=n
     if (useProxy) {
       headers['X-Target-Url']  = ep.url;
       if (ep.auth) headers['X-Target-Auth'] = ep.auth;
+      if (payload.simIp) headers['X-Sim-Ip'] = payload.simIp;
     } else {
       if (ep.auth) headers['Authorization'] = ep.auth;
     }

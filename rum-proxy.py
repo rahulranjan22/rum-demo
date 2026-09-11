@@ -17,7 +17,7 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 9211
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Target-Url, X-Target-Auth",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Target-Url, X-Target-Auth, X-Sim-Ip",
     "Access-Control-Max-Age": "86400",
 }
 
@@ -45,6 +45,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         target_url = self.headers.get("X-Target-Url", "").strip()
         target_auth = self.headers.get("X-Target-Auth", "").strip()
+        sim_ip = self.headers.get("X-Sim-Ip", "").strip()
 
         if not target_url:
             self.send_response(400)
@@ -64,6 +65,8 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         req.add_header("Content-Type", ct)
         if target_auth:
             req.add_header("Authorization", target_auth)
+        if sim_ip:
+            req.add_header("X-Forwarded-For", sim_ip)
 
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
