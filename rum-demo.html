@@ -574,10 +574,25 @@ function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
     user_agent: ua
   };
 
+  const pgUrl = pageUrl(txName);
+  let parsedHost = 'localhost', parsedPath = '/', parsedProto = 'http:';
+  try { const u = new URL(pgUrl); parsedHost = u.hostname; parsedPath = u.pathname; parsedProto = u.protocol; } catch(_) {}
+
+  // context.request is how the real RUM agent conveys browser UA and client IP
+  // to the APM server. It reads user_agent.* from request.headers["User-Agent"]
+  // and client.ip / geo.* from request.socket.remote_address.
   const txContext = {
-    page: { url: pageUrl(txName), referrer: '' },
+    page: { url: pgUrl, referrer: '' },
     user_agent: ua,
-    tags: { lab: 'rum-demo' }
+    tags: { lab: 'rum-demo' },
+    request: {
+      method: 'GET',
+      url: { full: pgUrl, raw: parsedPath, protocol: parsedProto, hostname: parsedHost, pathname: parsedPath, search: '', hash: '' },
+      http_version: '1.1',
+      headers: { 'User-Agent': ua.original },
+      socket: { remote_address: simIp, encrypted: false }
+    },
+    response: { status_code: 200, finished: true, headers_sent: true }
   };
 
   const tx = {
@@ -606,7 +621,7 @@ function buildPayload(txName, txType, spans, captureErr, traceId, txId) {
     lines.push(JSON.stringify({ span: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, name: s.name, type: s.type, subtype: s.subtype||null, start: s.offset||0, duration: s.duration, timestamp: ts+(s.offset||0)*1000, labels: s.labels||undefined }}));
   });
   if (captureErr) {
-    const errCtx = { page: txContext.page, user_agent: ua };
+    const errCtx = { page: txContext.page, user_agent: ua, request: txContext.request };
     lines.push(JSON.stringify({ error: { id: randomHex(8), transaction_id: txId, parent_id: txId, trace_id: traceId, exception: { message: captureErr.message, type: 'Error' }, timestamp: ts, context: errCtx }}));
   }
   return { body: lines.join('\n'), traceId, txId, simIp, simUa: ua.original };
